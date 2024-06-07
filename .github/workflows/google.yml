@@ -1,0 +1,91 @@
+#这个工作流将构建一个docker容器，将其发布到Google Container Registry，并在有推送到“main”分支时将其部署到GKE。
+#
+#配置此工作流：
+#
+#1。确保您的存储库包含Google Kubernetes引擎集群所需的配置，包括deployment.yml、kustomization.yml、service.yml等。
+#
+#2。为GitHub创建并配置工作负载标识提供者（https：//GitHub. com/google-GitHub-actions/auth#设置-Workload-Identity-federation）
+#
+#3。更改GAR_LOCATION、GKE_ZONE、GKE_CLUSTER、IMAGE、REPOSITORY和DEPLOYMENT_NAME环境变量的值（如下所示）。
+#
+#更多关于如何运行工作流的支持，请访问https://github.com/google-github-actions/setup-gcloud/tree/master/example-workflows/gke-kustomize
+
+名称：构建并部署到GKE
+
+使用
+控制+空间
+分支：
+
+导航到下一个占位符。
+$
+GAR_LOCATION:us-central1#TODO：工件注册表的更新区域
+GKE_CLUSTER:CLUSTER-1#TODO：更新到集群名
+GKE_ZONE:us-central1-c#TODO：更新到集群区域
+DEPLOYMENT_NAME:gke-test#TODO：更新到部署名称
+REPOSITORY:samples#TODO：更新工件注册表docker存储库
+图片来源：static-site
+
+使用
+  setup-build-publish-deploy:
+名称：安装、构建、发布和部署
+运行：ubuntu-最新
+环境：生产
+
+突耳
+内容：“阅读”
+id-token: 'write'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+付款台
+    - -名称：Docker配置: 'auth'
+与
+名字
+-name：设置GKE凭证:
+        token_format: 'access_token'
+        workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider'
+        service_account: 'my-service-account@my-project.iam.gserviceaccount.com'
+
+actions/checkout@v4
+query为空
+query为空
+query为空
+query为空
+
+query为空
+query为空
+码头工配置
+-
+echo $
+      uses: google-github-actions/get-gke-credentials@v0
+      with:
+        cluster_name: ${{ env.GKE_CLUSTER }}
+        location: ${{ env.GKE_ZONE }}
+
+    # Build the Docker image
+    - name: Build
+      run: |-
+        docker build \
+          --tag "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA" \
+          --build-arg GITHUB_SHA="$GITHUB_SHA" \
+          --build-arg GITHUB_REF="$GITHUB_REF" \
+          .
+    # Push the Docker image to Google Artifact Registry
+    - name: Publish
+      run: |-
+        docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA"
+    # Set up kustomize
+    - name: Set up Kustomize
+      run: |-
+        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        chmod u+x ./kustomize
+    # Deploy the Docker image to the GKE cluster
+    - name: Deploy
+      run: |-
+        # replacing the image name in the k8s template
+        ./kustomize edit set image LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE:TAG=$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA
+        ./kustomize build . | kubectl apply -f -
+        kubectl rollout status deployment/$DEPLOYMENT_NAME
+        kubectl get services -o wide
